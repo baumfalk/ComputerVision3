@@ -52,8 +52,8 @@ Scene3DRenderer::Scene3DRenderer(Reconstructor &r, const vector<Camera*> &cs) :
 	_previous_frame = -1;
 
 	const int H = 0;
-	const int S = 15;
-	const int V = 25;
+	const int S = 36;
+	const int V = 42;
 	_h_threshold = H;
 	_ph_threshold = H;
 
@@ -65,8 +65,10 @@ Scene3DRenderer::Scene3DRenderer(Reconstructor &r, const vector<Camera*> &cs) :
 
 	_e_size = 1;
 	_pe_size = 1;
-	_d_size = 1;
-	_pd_size = 1;
+	_d_size = 2;
+	_pd_size = 2;
+
+	
 
 	createTrackbar("Frame", SLIDER_WINDOW, &_current_frame, _number_of_frames - 2);
 	createTrackbar("H", SLIDER_WINDOW, &_h_threshold, 255);

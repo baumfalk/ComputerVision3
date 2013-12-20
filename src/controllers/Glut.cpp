@@ -176,8 +176,27 @@ int Glut::initializeWindows(const char* win_name)
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 
+	// best frame for our movie
+	scene3d.setCurrentFrame(101);
+
 	//	return int(msg.wParam);
 	return 1;
+}
+
+void Glut::cluster() {
+	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
+
+	vector<Point2f> voxelsVector;
+	for (int i = 0; i < voxels.size(); i++) {
+		voxelsVector.push_back(Point2f(voxels[i]->x, voxels[i]->y));
+	}
+
+	Mat voxels2d(voxelsVector, CV_32F);
+	Mat labels;
+	Mat centers;
+	kmeans(voxels2d, 4, labels, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 10000, 0.0001), 5, KMEANS_RANDOM_CENTERS, centers);
+	cout << labels << endl;
+	cout << centers << endl;
 }
 
 /**
@@ -185,6 +204,11 @@ int Glut::initializeWindows(const char* win_name)
  */
 void Glut::mainLoopWindows()
 {
+	if (!_glut->getScene3d().isQuit()) {
+		update(0);
+		display();
+		cluster();
+	}
 	while(!_glut->getScene3d().isQuit())
 	{
 		update(0);
@@ -538,6 +562,7 @@ void Glut::display()
  */
 void Glut::update(int v)
 {
+	
 	char key = waitKey(10);
 	keyboard(key, 0, 0);  // call glut key handler :)
 
@@ -622,7 +647,6 @@ void Glut::update(int v)
 
 	// Update the frame slider position
 	setTrackbarPos("Frame", SLIDER_WINDOW, scene3d.getCurrentFrame());
-
 #ifndef _WIN32
 	glutSwapBuffers();
 	glutTimerFunc(10, update, 0);

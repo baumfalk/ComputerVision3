@@ -81,6 +81,7 @@ public:
 	static void idle();
 	static void display();
 	static void update(int);
+	static void cluster();
 	static void quit();
 
 	Scene3DRenderer& getScene3d() const
