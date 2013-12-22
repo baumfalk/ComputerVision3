@@ -192,11 +192,29 @@ void Glut::cluster() {
 	}
 
 	Mat voxels2d(voxelsVector, CV_32F);
-	Mat labels;
-	Mat centers;
-	kmeans(voxels2d, 4, labels, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 10000, 0.0001), 5, KMEANS_RANDOM_CENTERS, centers);
-	cout << labels << endl;
-	cout << centers << endl;
+
+
+	// keep doing kmeans until there is enough distance between clusters (i.e. we are fairly sure that we are not in a local maximum)
+	float minDist = 51;
+	do
+	{
+		kmeans(voxels2d, 4, _glut->_labels, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 10000, 0.0001), 5, KMEANS_RANDOM_CENTERS, _glut->_clusterCenters);
+		for (int i = 0; i < 3; i++)
+		{
+			const float* Mi = _glut->_clusterCenters.ptr<float>(i);
+			for (int j = i + 1; j < 4; j++) {
+				const float* Mj = _glut->_clusterCenters.ptr<float>(j);
+				float a = Mi[0] - Mj[0];
+				float b = Mi[1] - Mj[1];
+				float dist = sqrt(a*a + b*b);
+				if (dist < minDist)
+					minDist = dist;
+			}
+		}
+	} while (minDist <= 50);
+	
+
+	cout << _glut->_clusterCenters << endl;
 }
 
 /**
@@ -205,14 +223,19 @@ void Glut::cluster() {
 void Glut::mainLoopWindows()
 {
 	if (!_glut->getScene3d().isQuit()) {
+		
 		update(0);
-		display();
 		cluster();
+		display();
+		
 	}
 	while(!_glut->getScene3d().isQuit())
 	{
+
 		update(0);
+		cluster();
 		display();
+		
 	}
 }
 #endif
@@ -541,6 +564,7 @@ void Glut::display()
 	if (scene3d.isShowVolume()) drawVolume();
 	if (scene3d.isShowArcball()) drawArcball();
 
+	drawClusterCenters();
 	drawVoxels();
 
 	if (scene3d.isShowOrg()) drawWCoord();
@@ -651,6 +675,29 @@ void Glut::update(int v)
 	glutSwapBuffers();
 	glutTimerFunc(10, update, 0);
 #endif
+}
+
+
+void Glut::drawClusterCenters()
+{
+	const Scene3DRenderer& scene3d = _glut->getScene3d();
+	glLineWidth(1.0f);
+	glPushMatrix();
+	glBegin(GL_LINES);
+
+	const int len = scene3d.getSquareSideLen();
+
+	for (int i = 0; i < _glut->_clusterCenters.rows; i++)
+	{
+		const float* Mi = _glut->_clusterCenters.ptr<float>(i);
+	
+		glColor4f(1.0f, 0.0f, 0.0f, 0.5f);
+		glVertex3f(Mi[0], Mi[1], 0.0f);
+		glVertex3f(Mi[0], Mi[1], len*30);
+	}
+
+	glEnd();
+	glPopMatrix();
 }
 
 /**
@@ -841,9 +888,29 @@ void Glut::drawVoxels()
 	glBegin(GL_POINTS);
 
 	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
+
 	for (size_t v = 0; v < voxels.size(); v++)
 	{
-		glColor4f(0.5f, 0.5f, 0.5f, 0.5f);
+		//cout << v << endl;
+		int label = 0;
+		if (_glut->_labels.cols != 0)
+			label = _glut->_labels.at<int>(v);
+		if (label == 0)
+		{
+			glColor4f(1.0f, 0.5f, 0.5f, 0.5f);
+		}
+		else if (label == 1)
+		{
+			glColor4f(0.5f, 1.0f, 0.5f, 0.5f);
+		}
+		else if (label == 2)
+		{
+			glColor4f(0.5f, 0.5f, 1.0f, 0.5f);
+		}
+		else 
+		{
+			glColor4f(0.75f, 0.25f, 1.0f, 0.5f);
+		}
 		glVertex3f((GLfloat) voxels[v]->x, (GLfloat) voxels[v]->y, (GLfloat) voxels[v]->z);
 	}
 

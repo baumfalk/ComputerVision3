@@ -43,6 +43,8 @@ namespace nl_uu_science_gmt
 class Glut
 {
 	Scene3DRenderer &_scene3d;
+	cv::Mat	 _clusterCenters;
+	cv::Mat  _labels;
 
 	static Glut* _glut;
 
@@ -83,11 +85,12 @@ public:
 	static void update(int);
 	static void cluster();
 	static void quit();
-
+	static void drawClusterCenters();
 	Scene3DRenderer& getScene3d() const
 	{
 		return _scene3d;
 	}
+
 };
 
 } /* namespace nl_uu_science_gmt */
