@@ -199,8 +199,11 @@ void Glut::cluster() {
 	do
 	{
 		kmeans(voxels2d, 4, _glut->_labels, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 10000, 0.0001), 5, KMEANS_RANDOM_CENTERS, _glut->_clusterCenters);
+		// for all but the last cluster center
 		for (int i = 0; i < 3; i++)
 		{
+			// check if all the cluster centers with a higher number
+			// than the cluster we are looking at are too close
 			const float* Mi = _glut->_clusterCenters.ptr<float>(i);
 			for (int j = i + 1; j < 4; j++) {
 				const float* Mj = _glut->_clusterCenters.ptr<float>(j);
@@ -214,7 +217,189 @@ void Glut::cluster() {
 	} while (minDist <= 50);
 	
 
-	cout << _glut->_clusterCenters << endl;
+	//cout << _glut->_clusterCenters << endl;
+}
+
+struct RGBcolor {
+	float r;
+	float g;
+	float b;
+};
+
+
+void Glut::computeColorModels() {
+	cluster();
+	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
+	map<Point2f, int> pt2vxl_vector[4];
+	map<int, RGBcolor> voxel_colors;
+	vector<int> voxel_count;
+	for (int i = 0; i < 4; i++) {
+		map<Point2f, int> pt2vxl;
+		pt2vxl_vector[i] = pt2vxl;
+	}
+	// for each voxel
+	for (int v = 0; v < voxels.size(); v++)
+	{
+		voxel_count.push_back(0);
+		int label = 0;
+		//if (_glut->_labels.cols != 0)
+		label = _glut->_labels.at<int>(v);
+		// for each view	
+		for (int i = 0; i < 4; i++) {
+			// project voxel to 2d point
+			Camera * cam = _glut->getScene3d().getCameras()[i];
+			Point3f pt3d(voxels.at(v)->x, voxels.at(v)->y, voxels.at(v)->z);
+			Point2f pt2d = cam->projectOnView(pt3d);
+			// rounding so that small differences
+			// inherent to working with floats are
+			// neglected.
+			pt2d.x = roundf(pt2d.x);
+			pt2d.y = roundf(pt2d.y);
+			
+			// if another voxel with same 2d point exists
+			if (pt2vxl_vector[i].find(pt2d) != pt2vxl_vector[i].end()) {
+				// calculate distance from voxel to camera point
+				Reconstructor::Voxel * voxel_other = voxels[pt2vxl_vector[i][pt2d]];
+				Point3f pt3d_other(voxel_other->x, voxel_other->y, voxel_other->z);
+				double x_diff, y_diff, z_diff, x_diff_other,
+					y_diff_other, z_diff_other,distance,distance_other;
+				x_diff = abs(pt3d.x - cam->getCameraLocation().x);
+				y_diff = abs(pt3d.y - cam->getCameraLocation().y);
+				z_diff = abs(pt3d.z - cam->getCameraLocation().z);
+				distance = sqrtf(x_diff*x_diff + y_diff*y_diff + z_diff*z_diff);
+				
+				x_diff_other = abs(cam->getCameraLocation().x - pt3d_other.x);
+				y_diff_other = abs(cam->getCameraLocation().y - pt3d_other.y);
+				z_diff_other = abs(cam->getCameraLocation().z - pt3d_other.z);
+				distance_other = sqrtf(x_diff_other*x_diff_other + y_diff_other*y_diff_other + z_diff_other*z_diff_other);
+				// if this voxel is closer to camera point than the other voxel
+				if (distance < distance_other) {
+					// replace other voxel/point pair with this voxel/point pair
+					pt2vxl_vector[i][pt2d] = v;
+				}
+				
+			}
+			// else add voxel/point pair
+			else {
+				pt2vxl_vector[i][pt2d] = v;
+			}
+		}
+		// for each voxel/point pair
+
+			// add point color value to voxel color average
+		// add voxel color average to cluster average
+	}
+	
+	Mat frame;
+
+	RGBcolor pointColor;
+	RGBcolor pointColor_old;
+	// for each viewpoint
+	for (int i = 0; i < 4; i++) {
+		Camera * cam = _glut->getScene3d().getCameras()[i];
+		frame = cam->getFrame();
+		if (frame.dims == 0)
+			continue;
+		cout << frame.dims << endl;
+		// for each voxel/point pair
+		for (map<Point2f, int>::iterator it = pt2vxl_vector[i].begin(); it != pt2vxl_vector[i].end(); it++) {
+			int itInt = it->second;
+			voxel_count[itInt]++;
+			Point2f point = it->first;
+
+			if (voxel_count[itInt] == 1) {
+				cout << frame.dims << endl;
+				if (point.x < frame.rows && point.y < frame.cols) {
+					cout << point.x << " " << point.y << endl;
+				}
+				Vec3f bgrPixel = frame.at<Vec3f>(point.x, point.y);
+				cout << "wp" << endl;
+				pointColor.b = bgrPixel[0];
+				pointColor.g = bgrPixel[1];
+				pointColor.r = bgrPixel[2];
+
+				
+
+				voxel_colors[itInt] = pointColor;
+			} 
+			else {
+				pointColor_old = voxel_colors.at(itInt);
+				pointColor.r = ((pointColor_old.r * (voxel_count[itInt] - 1) + frame.at<Vec3f>(point.x, point.y)[2]) / itInt);
+				pointColor.g = ((pointColor_old.g * (voxel_count[itInt] - 1) + frame.at<Vec3f>(point.x, point.y)[1]) / itInt);
+				pointColor.b = ((pointColor_old.b * (voxel_count[itInt] - 1) + frame.at<Vec3f>(point.x, point.y)[0]) / itInt);
+				voxel_colors[itInt] = pointColor;
+			}
+		}
+	}
+}
+
+void Glut::updateColorModels() {
+	cluster();
+}
+
+void Glut::drawClusterCenters()
+{
+	const Scene3DRenderer& scene3d = _glut->getScene3d();
+	glLineWidth(1.0f);
+	glPushMatrix();
+	glBegin(GL_LINES);
+
+	const int len = scene3d.getSquareSideLen();
+
+	for (int i = 0; i < _glut->_clusterCenters.rows; i++)
+	{
+		const float* Mi = _glut->_clusterCenters.ptr<float>(i);
+
+		glColor4f(1.0f, 0.0f, 0.0f, 0.5f);
+		glVertex3f(Mi[0], Mi[1], 0.0f);
+		glVertex3f(Mi[0], Mi[1], len * 30);
+	}
+
+	glEnd();
+	glPopMatrix();
+}
+
+/**
+* Draw all visible voxels
+*/
+void Glut::drawVoxels()
+{
+	glPushMatrix();
+
+	// apply default translation
+	glTranslatef(0, 0, 0);
+	glPointSize(2.0f);
+	glBegin(GL_POINTS);
+
+	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
+
+	for (size_t v = 0; v < voxels.size(); v++)
+	{
+		int label = 0;
+		if (_glut->_labels.cols != 0)
+			label = _glut->_labels.at<int>(v);
+		// different color per label
+		if (label == 0)
+		{
+			glColor4f(1.0f, 0.5f, 0.5f, 0.5f);
+		}
+		else if (label == 1)
+		{
+			glColor4f(0.5f, 1.0f, 0.5f, 0.5f);
+		}
+		else if (label == 2)
+		{
+			glColor4f(0.5f, 0.5f, 1.0f, 0.5f);
+		}
+		else
+		{
+			glColor4f(0.75f, 0.25f, 1.0f, 0.5f);
+		}
+		glVertex3f((GLfloat)voxels[v]->x, (GLfloat)voxels[v]->y, (GLfloat)voxels[v]->z);
+	}
+
+	glEnd();
+	glPopMatrix();
 }
 
 /**
@@ -225,14 +410,20 @@ void Glut::mainLoopWindows()
 	if (!_glut->getScene3d().isQuit()) {
 		
 		update(0);
-		cluster();
+		//cluster();
+		//computeColorModels();
 		display();
 		
 	}
+	update(0);
+	//cluster();
+	computeColorModels();
+	display();
 	while(!_glut->getScene3d().isQuit())
 	{
 
 		update(0);
+		//updateColorModels();
 		cluster();
 		display();
 		
@@ -678,27 +869,7 @@ void Glut::update(int v)
 }
 
 
-void Glut::drawClusterCenters()
-{
-	const Scene3DRenderer& scene3d = _glut->getScene3d();
-	glLineWidth(1.0f);
-	glPushMatrix();
-	glBegin(GL_LINES);
 
-	const int len = scene3d.getSquareSideLen();
-
-	for (int i = 0; i < _glut->_clusterCenters.rows; i++)
-	{
-		const float* Mi = _glut->_clusterCenters.ptr<float>(i);
-	
-		glColor4f(1.0f, 0.0f, 0.0f, 0.5f);
-		glVertex3f(Mi[0], Mi[1], 0.0f);
-		glVertex3f(Mi[0], Mi[1], len*30);
-	}
-
-	glEnd();
-	glPopMatrix();
-}
 
 /**
  * Draw the floor
@@ -875,48 +1046,7 @@ void Glut::drawArcball()
 #endif
 }
 
-/**
- * Draw all visible voxels
- */
-void Glut::drawVoxels()
-{
-	glPushMatrix();
 
-	// apply default translation
-	glTranslatef(0, 0, 0);
-	glPointSize(2.0f);
-	glBegin(GL_POINTS);
-
-	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
-
-	for (size_t v = 0; v < voxels.size(); v++)
-	{
-		//cout << v << endl;
-		int label = 0;
-		if (_glut->_labels.cols != 0)
-			label = _glut->_labels.at<int>(v);
-		if (label == 0)
-		{
-			glColor4f(1.0f, 0.5f, 0.5f, 0.5f);
-		}
-		else if (label == 1)
-		{
-			glColor4f(0.5f, 1.0f, 0.5f, 0.5f);
-		}
-		else if (label == 2)
-		{
-			glColor4f(0.5f, 0.5f, 1.0f, 0.5f);
-		}
-		else 
-		{
-			glColor4f(0.75f, 0.25f, 1.0f, 0.5f);
-		}
-		glVertex3f((GLfloat) voxels[v]->x, (GLfloat) voxels[v]->y, (GLfloat) voxels[v]->z);
-	}
-
-	glEnd();
-	glPopMatrix();
-}
 
 /**
  * Draw origin into scene

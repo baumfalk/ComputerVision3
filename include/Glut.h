@@ -33,6 +33,28 @@
 #include "Scene3DRenderer.h"
 #include "Reconstructor.h"
 
+
+// see http://stackoverflow.com/questions/1102392/stl-maps-with-user-defined-objects
+// we don't care about the internal ordering so a bogus ordering is used.
+
+namespace std
+{
+	template<> struct less<cv::Point2f>
+	{
+		bool operator() (const cv::Point2f& lhs, const cv::Point2f& rhs)
+		{
+			return lhs.x < rhs.x;
+		}
+	};
+		template<> struct less<cv::Scalar>
+		{
+			bool operator() (const cv::Scalar& lhs, const cv::Scalar& rhs)
+			{
+				return false;
+			}
+		};
+};
+
 // i am not sure about the compatibility with this...
 #define MOUSE_WHEEL_UP   3
 #define MOUSE_WHEEL_DOWN 4
@@ -84,6 +106,9 @@ public:
 	static void display();
 	static void update(int);
 	static void cluster();
+	static void computeColorModels();
+	static void updateColorModels();
+
 	static void quit();
 	static void drawClusterCenters();
 	Scene3DRenderer& getScene3d() const
