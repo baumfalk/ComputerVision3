@@ -72,11 +72,8 @@ class Glut
 	Scene3DRenderer &_scene3d;
 	cv::Mat	 _clusterCenters;
 	cv::Mat  _labels;
+	vector<RGBColor> _clusterColors;
 
-	vector<RGBColor> closestVectorColor[4];
-	vector<int> closestVectorId[4];
-	vector<float> closestVectorDistance[4];
-	vector<RGBColor> vectorColors;
 
 	static Glut* _glut;
 
