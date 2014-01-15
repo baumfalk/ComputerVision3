@@ -216,6 +216,13 @@ void Glut::cluster() {
 		}
 	} while (minDist <= 50);
 	
+	
+	vector<int> vectorLabels;
+
+	for (int i = 0; i < voxels.size(); i++) {
+		int label =  _glut->_labels.at<int>(i);
+		vectorLabels.push_back(label);
+	}
 
 	//cout << _glut->_clusterCenters << endl;
 }
@@ -227,97 +234,86 @@ void Glut::computeColorModels() {
 	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
 	cout << "Number of voxels:" << voxels.size() << endl;
 	
-	Mat cameraFrames[] = {	_glut->getScene3d().getCameras()[0]->getFrame(),
-							_glut->getScene3d().getCameras()[1]->getFrame(),
-							_glut->getScene3d().getCameras()[2]->getFrame(),
-							_glut->getScene3d().getCameras()[3]->getFrame()
-						 };
+	Mat cameraFrames[4];
 
 
 	vector<RGBColor> closestVectorColor[4];
 	vector<int> closestVectorId[4];
 	vector<float> closestVectorDistance[4];
 	vector<RGBColor> vectorColors(voxels.size());
-	//vector<RGBColor> clusterColors(4);
 	
+	// init
 	vector<int> clusterCount(4);
-	for (int i=0; i < 4; i++) {
 
-		vector<RGBColor> closestVectorColorTemp(cameraFrames[i].rows * cameraFrames[i].cols);
-		vector<int> closestVectorIdTemp(cameraFrames[i].rows * cameraFrames[i].cols);
-		vector<float> closestVectorDistanceTemp(cameraFrames[i].rows * cameraFrames[i].cols);
-		closestVectorId[i] = closestVectorIdTemp;
-		closestVectorDistance[i] = closestVectorDistanceTemp;
-		closestVectorColor[i] = closestVectorColorTemp;
-		RGBColor rgb;
-		rgb.r = -1;
-		rgb.g = -1;
-		rgb.b = -1;
-		for (int x = 0; x < cameraFrames[i].cols; x++) {
-			for (int y = 0; y < cameraFrames[i].rows; y++) {
-				closestVectorId[i][x + y*cameraFrames[i].cols] = -1;
-				closestVectorDistance[i][x + y*cameraFrames[i].cols] = -1;
-				closestVectorColor[i][x + y*cameraFrames[i].cols] = rgb;
-			}
-		}
+	getClosestVoxelsAndColorPerView(closestVectorId, closestVectorColor, cameraFrames,true);
+	viewColorsToVoxelColors(closestVectorId, closestVectorColor, cameraFrames, vectorColors);
 
-		vectorColors.push_back(rgb);
-		cout << "size:" << closestVectorId[i].size() << endl;
-		cout << "size2:" << closestVectorDistance[i].size() << endl;
-		_glut->_clusterColors.push_back(rgb);
-	}
-
-	// find colours
 	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++) {
-		//cout << "Current Voxel:" << currentVoxelIndex << endl;
-		Reconstructor::Voxel * voxel = voxels.at(currentVoxelIndex);
-	
-		for (int currentView = 0; currentView < 4; currentView++) {
-			Camera * cam = _glut->getScene3d().getCameras()[currentView];
-			Point3d voxelPoint(voxel->x, voxel->y, voxel->z);
-			
-			Point2d transformedPoint = _glut->getScene3d().getCameras()[currentView]->projectOnView(voxelPoint);
-			int closestVectorIdIndex = transformedPoint.x + transformedPoint.y*cameraFrames[currentView].cols;
-			float x_diff, y_diff, z_diff;
-			x_diff = abs(voxelPoint.x - cam->getCameraLocation().x);
-			y_diff = abs(voxelPoint.y - cam->getCameraLocation().y);
-			z_diff = abs(voxelPoint.z - cam->getCameraLocation().z);
-			float distance = sqrtf(x_diff*x_diff + y_diff*y_diff + z_diff*z_diff);
-
-			int vectorId = closestVectorId[currentView].at(closestVectorIdIndex);
+		int label = _glut->_labels.at<int>(currentVoxelIndex);
 		
-			float distance_other =  closestVectorDistance[currentView].at(closestVectorIdIndex);
-			if (vectorId == -1 || distance < distance_other) {
-				closestVectorId[currentView][closestVectorIdIndex] = currentVoxelIndex;
-				closestVectorDistance[currentView][closestVectorIdIndex] = distance;
+		_glut->_clusterColors[label].r += vectorColors[currentVoxelIndex].r;
+		_glut->_clusterColors[label].g += vectorColors[currentVoxelIndex].g;
+		_glut->_clusterColors[label].b += vectorColors[currentVoxelIndex].b;
+		clusterCount[label]++;
+	}
+	for (int i = 0; i < 4; i++) {
+		
+		
+		_glut->_clusterColors[i].r /= clusterCount[i];
+		_glut->_clusterColors[i].g /= clusterCount[i];
+		_glut->_clusterColors[i].b /= clusterCount[i];
+		cout << "clustercount" << clusterCount[i] << ", cluster " << i << " (r,g,b)" << _glut->_clusterColors[i].r << ", " << _glut->_clusterColors[i].g << ", " << _glut->_clusterColors[i].b << ")" << endl;
+	}
+
+}
+void Glut::updateColorModels() {
+	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
+	Mat cameraFrames[4];
 
 
- 				if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
-					cout << "voxelPoint (3d): (" << voxelPoint.x << ", " << voxelPoint.y << ", " << voxelPoint.z << ")" << endl;
-					cout << "transformedPoint (2d): (" << transformedPoint.x << ", " << transformedPoint.y << ")" << endl;
+	vector<RGBColor> closestVectorColor[4];
+	vector<int> closestVectorId[4];
+	vector<RGBColor> vectorColors(voxels.size());
 
-				}
-				if (cameraFrames[currentView].cols < transformedPoint.x || cameraFrames[currentView].rows < transformedPoint.y) {
-					cout << "cols (" << cameraFrames[currentView].cols << ") is smaller than x-loc (" << transformedPoint.x << ") or rows (";
-					cout << cameraFrames[currentView].rows << ") is smaller than y-loc (" << transformedPoint.y << ")" << endl;
-					continue;
-				}
+	getClosestVoxelsAndColorPerView(closestVectorId, closestVectorColor, cameraFrames, false);
+	viewColorsToVoxelColors(closestVectorId, closestVectorColor, cameraFrames, vectorColors);
+	// TODO: determine distance of pixel's color to color model
+	// Copy Mat labels to vector
+	
 
-				Vec3f bgrPixel = cameraFrames[currentView].at<Vec3b>(transformedPoint.y, transformedPoint.x);
-				//Vec3b bgrPixel2 = frame.at<Vec3b>(point.y, point.x);
-				RGBColor transformedPointColor;
-				transformedPointColor.b = bgrPixel.val[0];
-				transformedPointColor.g = bgrPixel.val[1];
-				transformedPointColor.r = bgrPixel.val[2];
-				closestVectorColor[currentView][closestVectorIdIndex] = transformedPointColor;
-				if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
-					cout << "Color for voxel " << currentVoxelIndex << " and camera " << currentView << ",format (r,g,b): (";
-					cout << closestVectorColor[currentView][closestVectorIdIndex].r << ", " << closestVectorColor[currentView][closestVectorIdIndex].g << ", " << closestVectorColor[currentView][closestVectorIdIndex].b << ")" << endl;
-				}
-			}	
+	Point3f voxelColorPoint;
+	Point3f ClusterColorPoint;
+	float distance;
+
+	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++){
+		// Determine distance
+		float distance = 0;
+		float tempDistance = 0;
+		for (int currentLabel = 0; currentLabel < 4; currentLabel++){
+			voxelColorPoint.x = vectorColors[currentVoxelIndex].r;
+			voxelColorPoint.y = vectorColors[currentVoxelIndex].g;
+			voxelColorPoint.z = vectorColors[currentVoxelIndex].b;
+
+			ClusterColorPoint.x = _glut->_clusterColors[currentLabel].r;
+			ClusterColorPoint.y = _glut->_clusterColors[currentLabel].g;
+			ClusterColorPoint.z = _glut->_clusterColors[currentLabel].b;
+
+			tempDistance = calcDistanceBetween(voxelColorPoint, ClusterColorPoint);
+
+			if (tempDistance <= distance) {
+				distance = tempDistance;
+
+			}
+
 		}
 	}
 
+
+}
+
+void Glut::viewColorsToVoxelColors(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
+									cv::Mat(&cameraFrames)[4], vector<RGBColor> &vectorColors){
+	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
 
 	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++) {
 		Reconstructor::Voxel * voxel = voxels.at(currentVoxelIndex);
@@ -340,197 +336,131 @@ void Glut::computeColorModels() {
 			averageColor.r /= 4;
 			averageColor.g /= 4;
 			averageColor.b /= 4;
-			//cout << "average (r,g,b):" << averageColor.r << ", " << averageColor.g << ", " << averageColor.b << ")" << endl;
+			cout << "average (r,g,b):" << averageColor.r << ", " << averageColor.g << ", " << averageColor.b << ")" << endl;
 			vectorColors[currentVoxelIndex] = averageColor;
 		}
 	}
-
-	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++) {
-		int label = _glut->_labels.at<int>(currentVoxelIndex);
-		_glut->_clusterColors[label].r += vectorColors[currentVoxelIndex].r;
-		_glut->_clusterColors[label].g += vectorColors[currentVoxelIndex].g;
-		_glut->_clusterColors[label].b += vectorColors[currentVoxelIndex].b;
-		clusterCount[label]++;
-	}
-	for (int i = 0; i < 4; i++) {
-		_glut->_clusterColors[i].r /= clusterCount[i];
-		_glut->_clusterColors[i].g /= clusterCount[i];
-		_glut->_clusterColors[i].b /= clusterCount[i];
-		cout << "cluster " << i << " (r,g,b)" << _glut->_clusterColors[i].r << ", " << _glut->_clusterColors[i].g << ", " << _glut->_clusterColors[i].b << ")" << endl;
-	}
-
-
-	
 }
-/*void Glut::computeColorModels2() {
-	cluster();
+
+void Glut::init(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
+	cv::Mat(&cameraFrames)[4], vector<float>(&closestVectorDistance)[4],
+	vector<RGBColor>& vectorColors, bool initClusterColors) {
+
+	cameraFrames[0] = _glut->getScene3d().getCameras()[0]->getFrame();
+	cameraFrames[1] = _glut->getScene3d().getCameras()[1]->getFrame();
+	cameraFrames[2] = _glut->getScene3d().getCameras()[2]->getFrame();
+	cameraFrames[3] = _glut->getScene3d().getCameras()[3]->getFrame();
+	
+
+	for (int i = 0; i < 4; i++) {
+
+		vector<RGBColor> closestVectorColorTemp(cameraFrames[i].rows * cameraFrames[i].cols);
+		vector<int> closestVectorIdTemp(cameraFrames[i].rows * cameraFrames[i].cols);
+		vector<float> closestVectorDistanceTemp(cameraFrames[i].rows * cameraFrames[i].cols);
+		closestVectorId[i] = closestVectorIdTemp;
+		closestVectorDistance[i] = closestVectorDistanceTemp;
+		closestVectorColor[i] = closestVectorColorTemp;
+		RGBColor rgb;
+		rgb.r = -1;
+		rgb.g = -1;
+		rgb.b = -1;
+		for (int x = 0; x < cameraFrames[i].cols; x++) {
+			for (int y = 0; y < cameraFrames[i].rows; y++) {
+				closestVectorId[i][x + y*cameraFrames[i].cols] = -1;
+				closestVectorDistance[i][x + y*cameraFrames[i].cols] = -1;
+				closestVectorColor[i][x + y*cameraFrames[i].cols] = rgb;
+			}
+		}
+
+		vectorColors.push_back(rgb);
+		if (initClusterColors)
+			_glut->_clusterColors.push_back(rgb);
+	}
+}
+
+void Glut::getClosestVoxelsAndColorPerView(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4], cv::Mat(&cameraFrames)[4], bool initClusterColors) {
+	
 	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
-	map<Point2f, int> pt2vxl_vector[4]; // point and index of the voxel in the vector voxels
-	map<int, Point2f> vxl2pt_vector[4];
-	map<int, RGBColor> voxel_colors;
-	map<int,int> voxel_count; 
-	// init
-	for (int i = 0; i < 4; i++) {
-		map<Point2f, int> pt2vxl;
-		pt2vxl_vector[i] = pt2vxl;
-		map<int, Point2f> vxl2pt;
-		vxl2pt_vector[i] = vxl2pt;
-	}
-	// determine for all views which voxels are visible.
-	// for each voxel
+	vector<float> closestVectorDistance[4];
+	vector<RGBColor> vectorColors(voxels.size());
+	init(closestVectorId, closestVectorColor, cameraFrames, closestVectorDistance, vectorColors, initClusterColors);
 	
-	for (int v = 0; v < voxels.size(); v++)
-	{
-		int teller = 0;
-		// for each view	
-		for (int i = 0; i < 4; i++) {
-			// project voxel to 2d point
-			Camera * cam = _glut->getScene3d().getCameras()[i];
-			Point3f pt3d(voxels.at(v)->x, voxels.at(v)->y, voxels.at(v)->z);
-			Point2f pt2d = cam->projectOnView(pt3d);
-			// rounding so that small differences
-			// inherent to working with floats are
-			// neglected.
-		//	pt2d.x = roundf(pt2d.x);
-			//pt2d.y = roundf(pt2d.y);
+	// find colours
+	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++) {
 
-			// if another voxel with same 2d point exists
-			if (pt2vxl_vector[i].find(pt2d) != pt2vxl_vector[i].end()) {
-				// calculate distance from voxel to camera point
-				int other_voxel_id = pt2vxl_vector[i][pt2d];
-				Reconstructor::Voxel * voxel_other = voxels[other_voxel_id];
-				Point3f pt3d_other(voxel_other->x, voxel_other->y, voxel_other->z);
-				double x_diff, y_diff, z_diff, x_diff_other,
-					y_diff_other, z_diff_other, distance, distance_other;
-				x_diff = abs(pt3d.x - cam->getCameraLocation().x);
-				y_diff = abs(pt3d.y - cam->getCameraLocation().y);
-				z_diff = abs(pt3d.z - cam->getCameraLocation().z);
-				distance = sqrtf(x_diff*x_diff + y_diff*y_diff + z_diff*z_diff);
-
-				x_diff_other = abs(cam->getCameraLocation().x - pt3d_other.x);
-				y_diff_other = abs(cam->getCameraLocation().y - pt3d_other.y);
-				z_diff_other = abs(cam->getCameraLocation().z - pt3d_other.z);
-				distance_other = sqrtf(x_diff_other*x_diff_other + y_diff_other*y_diff_other + z_diff_other*z_diff_other);
-				// if this voxel is closer to camera point than the other voxel
-				if (distance < distance_other) {
-					teller++;
-					// replace other voxel/point pair with this voxel/point pair
-					pt2vxl_vector[i][pt2d] = v;
-					// remove the other voxel
-					vxl2pt_vector[i].erase(other_voxel_id);
-				}
-
-			}
-			// else add voxel/point pair
-			else {
-				pt2vxl_vector[i][pt2d] = v;
-				vxl2pt_vector[i][v] = pt2d;
-			//}
+		for (int currentView = 0; currentView < 4; currentView++) {
+			calculateClosestVoxelAndColor(closestVectorId, closestVectorColor, cameraFrames, closestVectorDistance, vectorColors,currentView,currentVoxelIndex);		
 		}
 	}
-	cout << vxl2pt_vector[0].size() << endl;
-	cout << pt2vxl_vector[0].size() << endl;
-	Mat frame;
+}
 
-	RGBColor pointColor;
-	RGBColor pointColor_old;
-	for (int v = 0; v < voxels.size(); v++)
-	{
-		for (int i = 0; i < 4; i++) {
-			// is voxel with index v visible in viewpoint i
-			if (vxl2pt_vector[i].find(v) != vxl2pt_vector[i].end()) {
-				
-				Point3f pt3d(voxels.at(v)->x, voxels.at(v)->y, voxels.at(v)->z);
-				Camera * cam = _glut->getScene3d().getCameras()[i];
-				Point2f point = cam->projectOnView(pt3d);
-				cam = _glut->getScene3d().getCameras()[i];
-				frame = cam->getFrame();
-				
+RGBColor Glut::calculateColor(Vec3f & bgrPixel) {
+	//no idea why but it works.
+	RGBColor transformedPointColor;
+	transformedPointColor.b = bgrPixel.val[0];
+	transformedPointColor.g = bgrPixel.val[1];
+	transformedPointColor.r = bgrPixel.val[2];
+	return transformedPointColor;
+}
 
-				if (frame.dims == 0)
-					continue;
-			
-				voxel_count[v]++;
-				// first time we've seen this voxel in any view
-				if (voxel_count[v] == 1) {
-					if (point.x < frame.rows && point.y < frame.cols)
-					{
-						Vec3f bgrPixel = frame.at<Vec3b>(point.y, point.x);
-						//Vec3b bgrPixel2 = frame.at<Vec3b>(point.y, point.x);
+
+float Glut::calcDistanceBetween(Point3f pt1, Point3f pt2) {
+	float x_diff, y_diff, z_diff;
+
+	x_diff = abs(pt1.x - pt2.x);
+	y_diff = abs(pt1.y - pt2.y);
+	z_diff = abs(pt1.z - pt2.z);
+
+	float distance = sqrtf(x_diff*x_diff + y_diff*y_diff + z_diff*z_diff);
+	return distance;
+}
+
+void Glut::calculateClosestVoxelAndColor(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
+										cv::Mat(&cameraFrames)[4], vector<float>(&closestVectorDistance)[4],
+										vector<RGBColor>& vectorColors, int currentView, int currentVoxelIndex) {
+
+	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
+	Reconstructor::Voxel * voxel = voxels.at(currentVoxelIndex);
+
+	Point3d voxelPoint(voxel->x, voxel->y, voxel->z);
+	Point2d transformedPoint = _glut->getScene3d().getCameras()[currentView]->projectOnView(voxelPoint);
+	int closestVectorIdIndex = transformedPoint.x + transformedPoint.y*cameraFrames[currentView].cols;
+	int vectorId = closestVectorId[currentView].at(closestVectorIdIndex);
 	
-						pointColor.b = bgrPixel.val[0];
-						pointColor.g = bgrPixel.val[1];
-						pointColor.r = bgrPixel.val[2];
-						voxel_colors[v] = pointColor;
-						
-					}
-				}
-				else {
-					
-					if (point.x < frame.rows && point.y < frame.cols)
-					{		
-						pointColor_old = voxel_colors[v];
-					
-						pointColor.r = ((pointColor_old.r * (voxel_count[v] - 1) + frame.at<Vec3b>(point.x, point.y)[2]) / voxel_count[v]);
-						pointColor.g = ((pointColor_old.g * (voxel_count[v] - 1) + frame.at<Vec3b>(point.x, point.y)[1]) / voxel_count[v]);
-						pointColor.b = ((pointColor_old.b * (voxel_count[v] - 1) + frame.at<Vec3b>(point.x, point.y)[0]) / voxel_count[v]);
-						voxel_colors[v] = pointColor;
+	Camera * cam = _glut->getScene3d().getCameras()[currentView];
+	float distance = calcDistanceBetween(voxelPoint, cam->getCameraLocation());
+	float distance_other = closestVectorDistance[currentView].at(closestVectorIdIndex);
+
+	if (vectorId == -1 || distance < distance_other) {
+		closestVectorId[currentView][closestVectorIdIndex] = currentVoxelIndex;
+		closestVectorDistance[currentView][closestVectorIdIndex] = distance;
+
+		//todo: remove
+		if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
+			cout << "voxelPoint (3d): (" << voxelPoint.x << ", " << voxelPoint.y << ", " << voxelPoint.z << ")" << endl;
+			cout << "transformedPoint (2d): (" << transformedPoint.x << ", " << transformedPoint.y << ")" << endl;
+
+		}
+
+		if (cameraFrames[currentView].cols < transformedPoint.x || cameraFrames[currentView].rows < transformedPoint.y) {
+			cout << "cols (" << cameraFrames[currentView].cols << ") is smaller than x-loc (" << transformedPoint.x << ") or rows (";
+			cout << cameraFrames[currentView].rows << ") is smaller than y-loc (" << transformedPoint.y << ")" << endl;
+			return;
+		}
+		Vec3f bgrPixel = cameraFrames[currentView].at<Vec3b>(transformedPoint.y, transformedPoint.x);
+
+		RGBColor transformedPointColor = calculateColor(bgrPixel);
+		closestVectorColor[currentView][closestVectorIdIndex] = transformedPointColor;
 		
-					}
-				}
-			}
+		//todo remove
+		if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
+			cout << "Color for voxel " << currentVoxelIndex << " and camera " << currentView << ",format (r,g,b): (";
+			cout << closestVectorColor[currentView][closestVectorIdIndex].r << ", " << closestVectorColor[currentView][closestVectorIdIndex].g << ", " << closestVectorColor[currentView][closestVectorIdIndex].b << ")" << endl;
 		}
 	}
-	int label_count[4];
-	double r[4], g[4], b[4];
-	// average all voxel colors with the same label
-	
-	for (int v = 0; v < voxels.size(); v++)
-	{
-		bool visible = false;
-		for (int i = 0; i < 4; i++) {
-			if (vxl2pt_vector[i].find(v) != vxl2pt_vector[i].end()) {
-				visible = true;
-				break;
-			}
-		}
-		if (visible) {
-			cout << "HOO" << endl;
-			//labels
-			int label = _glut->_labels.at<int>(v);
-
-			label_count[label]++;
-	
-			if (label_count[label] == 1) {
-				
-				r[label] = voxel_colors[v].r;
-				g[label] = voxel_colors[v].g;
-				b[label] = voxel_colors[v].b;
-			}
-			else {
-				r[label] = (r[label] * (label_count[label] - 1) + voxel_colors[v].r) / label_count[label];
-				g[label] = (g[label] * (label_count[label] - 1) + voxel_colors[v].g) / label_count[label];
-				b[label] = (b[label] * (label_count[label] - 1) + voxel_colors[v].b) / label_count[label];
-			}
-			
-			
-		}
-	}
-
-	for (int i = 0; i < 4; i++) {
-		cout << r[i] << " " << g[i] << " " << b[i] << endl;
-	}
-
-	
-
-
 }
-*/
-void Glut::updateColorModels() {
-	cluster();
-	
 
-}
+
 
 void Glut::drawClusterCenters()
 {
@@ -593,14 +523,6 @@ void Glut::drawVoxels()
  */
 void Glut::mainLoopWindows()
 {
-	if (!_glut->getScene3d().isQuit()) {
-		
-		update(0);
-		//cluster();
-		//computeColorModels();
-		//display();
-		
-	}
 	update(0);
 	//cluster();
 	computeColorModels();

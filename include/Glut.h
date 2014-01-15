@@ -33,27 +33,6 @@
 #include "Scene3DRenderer.h"
 #include "Reconstructor.h"
 
-
-// see http://stackoverflow.com/questions/1102392/stl-maps-with-user-defined-objects
-// we don't care about the internal ordering so a bogus ordering is used.
-
-/*namespace std
-{
-	template<> struct less<cv::Point2f>
-	{
-		bool operator() (const cv::Point2f& lhs, const cv::Point2f& rhs)
-		{
-			return lhs.x < rhs.x;
-		}
-	};
-		template<> struct less<cv::Scalar>
-		{
-			bool operator() (const cv::Scalar& lhs, const cv::Scalar& rhs)
-			{
-				return false;
-			}
-		};
-};*/
 using namespace std;
 // i am not sure about the compatibility with this...
 #define MOUSE_WHEEL_UP   3
@@ -115,9 +94,18 @@ public:
 	static void cluster();
 	static void findColors();
 	static void computeColorModels();
-	static void computeColorModels2();
 	static void updateColorModels();
-
+	static void getClosestVoxelsAndColorPerView(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4], cv::Mat(&cameraFrames)[4], bool initClusterColors);
+	static void init(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
+					cv::Mat(&cameraFrames)[4], vector<float>(&closestVectorDistance)[4],
+					vector<RGBColor>& vectorColors, bool initClusterColors);
+	static void calculateClosestVoxelAndColor(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
+										cv::Mat(&cameraFrames)[4], vector<float>(&closestVectorDistance)[4],
+										vector<RGBColor>& vectorColors, int currentView, int currentVoxelIndex);
+	static RGBColor calculateColor(cv::Vec3f & bgrPixel);
+	static float calcDistanceBetween(cv::Point3f pt1, cv::Point3f pt2);
+	static void viewColorsToVoxelColors(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
+		cv::Mat(&cameraFrames)[4], vector<RGBColor>& vectorColors);
 	static void quit();
 	static void drawClusterCenters();
 	Scene3DRenderer& getScene3d() const
