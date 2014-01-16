@@ -273,7 +273,8 @@ void Glut::updateColorModels() {
 
 	vector<RGBColor> closestVectorColor[4];
 	vector<int> closestVectorId[4];
-	vector<RGBColor> vectorColors(voxels.size());
+	vector<RGBColor> vectorColors(voxels.size(),
+    vector<int> vectorLabels);
 
 	getClosestVoxelsAndColorPerView(closestVectorId, closestVectorColor, cameraFrames, false);
 	viewColorsToVoxelColors(closestVectorId, closestVectorColor, cameraFrames, vectorColors);
@@ -302,7 +303,7 @@ void Glut::updateColorModels() {
 
 			if (tempDistance <= distance) {
 				distance = tempDistance;
-
+                vectorLabels[currentVoxelIndex] = currentLabel;
 			}
 
 		}
