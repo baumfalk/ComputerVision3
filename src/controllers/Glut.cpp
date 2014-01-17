@@ -6,9 +6,13 @@
  */
 
 #include "Glut.h"
+#include <math.h>
 
 using namespace std;
 using namespace cv;
+
+
+
 
 namespace nl_uu_science_gmt
 {
@@ -217,14 +221,14 @@ void Glut::cluster() {
 	} while (minDist <= 50);
 	
 	
-	vector<int> vectorLabels;
+
 
 	for (int i = 0; i < voxels.size(); i++) {
 		int label =  _glut->_labels.at<int>(i);
-		vectorLabels.push_back(label);
+		_glut->_vectorLabels.push_back(label);
 	}
 
-	//cout << _glut->_clusterCenters << endl;
+	cout << _glut->_clusterCenters << endl;
 }
 
 
@@ -247,8 +251,10 @@ void Glut::computeColorModels() {
 
 	getClosestVoxelsAndColorPerView(closestVectorId, closestVectorColor, cameraFrames,true);
 	viewColorsToVoxelColors(closestVectorId, closestVectorColor, cameraFrames, vectorColors);
-
+	const Scene3DRenderer& scene3d = _glut->getScene3d();
+	const int len = scene3d.getSquareSideLen();
 	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++) {
+		
 		int label = _glut->_labels.at<int>(currentVoxelIndex);
 		
 		_glut->_clusterColors[label].r += vectorColors[currentVoxelIndex].r;
@@ -266,8 +272,13 @@ void Glut::computeColorModels() {
 	}
 
 }
+
+
+	
+
 void Glut::updateColorModels() {
 	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
+	int voxelCount = voxels.size();
 	Mat cameraFrames[4];
 
 
@@ -277,45 +288,160 @@ void Glut::updateColorModels() {
 
 	getClosestVoxelsAndColorPerView(closestVectorId, closestVectorColor, cameraFrames, false);
 	viewColorsToVoxelColors(closestVectorId, closestVectorColor, cameraFrames, vectorColors);
-	// TODO: determine distance of pixel's color to color model
-	// Copy Mat labels to vector
 	
-
 	Point3f voxelColorPoint;
-	Point3f ClusterColorPoint;
+	Point3f clusterColorPoint;
+
 	float distance;
 
-	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++){
+	_glut->_vectorLabels.clear();
+	_glut->_vectorLabels.resize(voxels.size());
+	// calculate closed label for each voxel (determined by color)
+	for (int currentVoxelIndex = 0; currentVoxelIndex < voxelCount; currentVoxelIndex++){
 		// Determine distance
 		float distance = 0;
 		float tempDistance = 0;
+		
 		for (int currentLabel = 0; currentLabel < 4; currentLabel++){
+			
 			voxelColorPoint.x = vectorColors[currentVoxelIndex].r;
 			voxelColorPoint.y = vectorColors[currentVoxelIndex].g;
 			voxelColorPoint.z = vectorColors[currentVoxelIndex].b;
 
-			ClusterColorPoint.x = _glut->_clusterColors[currentLabel].r;
-			ClusterColorPoint.y = _glut->_clusterColors[currentLabel].g;
-			ClusterColorPoint.z = _glut->_clusterColors[currentLabel].b;
-
-			tempDistance = calcDistanceBetween(voxelColorPoint, ClusterColorPoint);
+			clusterColorPoint.x = _glut->_clusterColors[currentLabel].r;
+			clusterColorPoint.y = _glut->_clusterColors[currentLabel].g;
+			clusterColorPoint.z = _glut->_clusterColors[currentLabel].b;
+			//float hueVector = rgb_to_hsv(vectorColors[currentVoxelIndex]).hue;
+			//float hueCluster = rgb_to_hsv(_glut->_clusterColors[currentLabel]).hue;
+			//tempDistance = abs(hueVector - hueCluster);
+			tempDistance = calcDistanceBetween3d(voxelColorPoint, clusterColorPoint);
+			if (currentLabel == 0) {
+				distance = tempDistance;
+			}
 
 			if (tempDistance <= distance) {
 				distance = tempDistance;
-
+				_glut->_vectorLabels[currentVoxelIndex] = currentLabel;
+				
 			}
-
 		}
+
+	}
+	//int labelAmount[4] = { 0, 0, 0,0};
+	//long xCoor[4] = { 0, 0, 0, 0 };
+	//long yCoor[4] = { 0, 0, 0, 0};
+	//vector<Point2f> voxelsVector;
+
+	//// Sum all x and y coordinates for certain label
+	//for (int i = 0; i < voxelCount; i++) {
+	//	voxelsVector.push_back(Point2f(voxels[i]->x, voxels[i]->y));
+	//	labelAmount[_glut->_vectorLabels[i]]++;
+	//	xCoor[_glut->_vectorLabels[i]] += voxels[i]->x;
+	//	yCoor[_glut->_vectorLabels[i]] += voxels[i]->y;
+	//}
+	//vector<Point2f> vecClusterCenters(4);
+	//
+	//// Calculate vecClusterCenters
+	//for (int i = 0; i < 4; i++){
+	//	vecClusterCenters[i].x = xCoor[i] / labelAmount[i];
+	//	vecClusterCenters[i].y = yCoor[i] / labelAmount[i];
+	//	cout << vecClusterCenters[i].x << " " << vecClusterCenters[i].y << endl;
+	//}
+
+	////CalcDistance from all voxels to clusters mean and find best.
+	//for (int currentVoxelIndex = 0; currentVoxelIndex < voxelCount; currentVoxelIndex++) {
+	//	
+	//	float distance = 0;
+	//	float tempDistance = 0;
+
+	//	for (int currentLabel = 0; currentLabel < 4; currentLabel++){
+
+	//		tempDistance = calcDistanceBetween2d(voxelsVector[currentVoxelIndex], vecClusterCenters[currentLabel]);
+	//		if (currentLabel == 0)
+	//			distance = tempDistance;
+	//		if (tempDistance <= distance) {
+	//			distance = tempDistance;
+	//			_glut->_vectorLabels[currentVoxelIndex] = currentLabel;
+	//		}
+	//	}
+	//}
+	vector<Point2f>voxels2dvector;
+	for (int i = 0; i < voxelCount; i++) {
+		voxels2dvector.push_back(Point2f(voxels[i]->x, voxels[i]->y));
+	}
+	Mat voxels2d(voxels2dvector, CV_32F);
+	Mat labels(_glut->_vectorLabels, true);
+	
+	//Mat matClusterCenters(vecClusterCenters, CV_32F);
+	Mat clusterCenters;
+	kmeans(voxels2d, 4, labels, TermCriteria(CV_TERMCRIT_ITER | CV_TERMCRIT_EPS, 10000, 0.0001), 5, KMEANS_USE_INITIAL_LABELS, clusterCenters);
+	_glut->_labels = labels;
+	
+	_glut->_clusterCenters = clusterCenters;
+	cout << _glut->_clusterCenters << endl;
+}
+
+//from http://en.literateprograms.org/RGB_to_HSV_color_space_conversion_%28C%29
+struct HSVColor Glut::rgb_to_hsv(struct RGBColor rgb)
+{
+	struct HSVColor hsv;
+	unsigned char rgb_min, rgb_max;
+	rgb_min = MIN3(rgb.r, rgb.g, rgb.b);
+	rgb_max = MAX3(rgb.r, rgb.g, rgb.b);
+	hsv.val = rgb_max;
+	if (hsv.val == 0) {
+		hsv.hue = hsv.sat = 0;
+		return hsv;
+	}
+	hsv.sat = 255 * long(rgb_max - rgb_min) / hsv.val;
+	if (hsv.sat == 0) {
+		hsv.hue = 0;
+		return hsv;
+	}
+	/* Compute hue */
+	if (rgb_max == rgb.r) {
+		hsv.hue = 0 + 43 * (rgb.g - rgb.b) / (rgb_max - rgb_min);
+	}
+	else if (rgb_max == rgb.g) {
+		hsv.hue = 85 + 43 * (rgb.b - rgb.r) / (rgb_max - rgb_min);
+	}
+	else /* rgb_max == rgb.b */ {
+		hsv.hue = 171 + 43 * (rgb.r - rgb.g) / (rgb_max - rgb_min);
+	}
+	return hsv;
+}
+
+//based on  http://www.rapidtables.com/convert/color/hsv-to-rgb.htm
+struct RGBColor Glut::hsv_to_rgb(struct HSVColor hsv)
+{
+	RGBColor rgb;
+
+	int i = floor(hsv.hue * 6);
+	float f = hsv.hue * 6 - i;
+	float p = hsv.val * (1 - hsv.sat);
+	float q = hsv.val * (1 - f * hsv.sat);
+	float t = hsv.val * (1 - (1 - f) * hsv.sat);
+
+	switch (i % 6){
+	case 0: rgb.r = hsv.val, rgb.g = t, rgb.b = p; break;
+	case 1: rgb.r = q, rgb.g = hsv.val, rgb.b = p; break;
+	case 2: rgb.r = p, rgb.g = hsv.val, rgb.b = t; break;
+	case 3: rgb.r = p, rgb.g = q, rgb.b = hsv.val; break;
+	case 4: rgb.r = t, rgb.g = p, rgb.b = hsv.val; break;
+	case 5: rgb.r = hsv.val, rgb.g = p, rgb.b = q; break;
 	}
 
-
+	return rgb;
 }
 
 void Glut::viewColorsToVoxelColors(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
 									cv::Mat(&cameraFrames)[4], vector<RGBColor> &vectorColors){
 	vector<Reconstructor::Voxel*> voxels = _glut->getScene3d().getReconstructor().getVisibleVoxels();
 
+	const Scene3DRenderer& scene3d = _glut->getScene3d();
+	const int len = scene3d.getSquareSideLen();
 	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++) {
+	
 		Reconstructor::Voxel * voxel = voxels.at(currentVoxelIndex);
 		int count = 0;
 		RGBColor averageColor;
@@ -336,7 +462,6 @@ void Glut::viewColorsToVoxelColors(vector<int>(&closestVectorId)[4], vector<RGBC
 			averageColor.r /= 4;
 			averageColor.g /= 4;
 			averageColor.b /= 4;
-			cout << "average (r,g,b):" << averageColor.r << ", " << averageColor.g << ", " << averageColor.b << ")" << endl;
 			vectorColors[currentVoxelIndex] = averageColor;
 		}
 	}
@@ -387,7 +512,6 @@ void Glut::getClosestVoxelsAndColorPerView(vector<int>(&closestVectorId)[4], vec
 	
 	// find colours
 	for (int currentVoxelIndex = 0; currentVoxelIndex < voxels.size(); currentVoxelIndex++) {
-
 		for (int currentView = 0; currentView < 4; currentView++) {
 			calculateClosestVoxelAndColor(closestVectorId, closestVectorColor, cameraFrames, closestVectorDistance, vectorColors,currentView,currentVoxelIndex);		
 		}
@@ -404,7 +528,7 @@ RGBColor Glut::calculateColor(Vec3f & bgrPixel) {
 }
 
 
-float Glut::calcDistanceBetween(Point3f pt1, Point3f pt2) {
+float Glut::calcDistanceBetween3d(Point3f pt1, Point3f pt2) {
 	float x_diff, y_diff, z_diff;
 
 	x_diff = abs(pt1.x - pt2.x);
@@ -412,6 +536,16 @@ float Glut::calcDistanceBetween(Point3f pt1, Point3f pt2) {
 	z_diff = abs(pt1.z - pt2.z);
 
 	float distance = sqrtf(x_diff*x_diff + y_diff*y_diff + z_diff*z_diff);
+	return distance;
+}
+
+float Glut::calcDistanceBetween2d(Point2f pt1, Point2f pt2) {
+	float x_diff, y_diff;
+
+	x_diff = abs(pt1.x - pt2.x);
+	y_diff = abs(pt1.y - pt2.y);
+
+	float distance = sqrtf(x_diff*x_diff + y_diff*y_diff);
 	return distance;
 }
 
@@ -428,7 +562,7 @@ void Glut::calculateClosestVoxelAndColor(vector<int>(&closestVectorId)[4], vecto
 	int vectorId = closestVectorId[currentView].at(closestVectorIdIndex);
 	
 	Camera * cam = _glut->getScene3d().getCameras()[currentView];
-	float distance = calcDistanceBetween(voxelPoint, cam->getCameraLocation());
+	float distance = calcDistanceBetween3d(voxelPoint, cam->getCameraLocation());
 	float distance_other = closestVectorDistance[currentView].at(closestVectorIdIndex);
 
 	if (vectorId == -1 || distance < distance_other) {
@@ -436,11 +570,11 @@ void Glut::calculateClosestVoxelAndColor(vector<int>(&closestVectorId)[4], vecto
 		closestVectorDistance[currentView][closestVectorIdIndex] = distance;
 
 		//todo: remove
-		if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
-			cout << "voxelPoint (3d): (" << voxelPoint.x << ", " << voxelPoint.y << ", " << voxelPoint.z << ")" << endl;
-			cout << "transformedPoint (2d): (" << transformedPoint.x << ", " << transformedPoint.y << ")" << endl;
+		//if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
+		//	cout << "voxelPoint (3d): (" << voxelPoint.x << ", " << voxelPoint.y << ", " << voxelPoint.z << ")" << endl;
+		//	cout << "transformedPoint (2d): (" << transformedPoint.x << ", " << transformedPoint.y << ")" << endl;
 
-		}
+		//}
 
 		if (cameraFrames[currentView].cols < transformedPoint.x || cameraFrames[currentView].rows < transformedPoint.y) {
 			cout << "cols (" << cameraFrames[currentView].cols << ") is smaller than x-loc (" << transformedPoint.x << ") or rows (";
@@ -453,10 +587,10 @@ void Glut::calculateClosestVoxelAndColor(vector<int>(&closestVectorId)[4], vecto
 		closestVectorColor[currentView][closestVectorIdIndex] = transformedPointColor;
 		
 		//todo remove
-		if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
+		/*if (currentVoxelIndex % 250 == 0 || currentVoxelIndex % 250 == 1 || currentVoxelIndex % 250 == 2 || currentVoxelIndex % 250 == 3) {
 			cout << "Color for voxel " << currentVoxelIndex << " and camera " << currentView << ",format (r,g,b): (";
 			cout << closestVectorColor[currentView][closestVectorIdIndex].r << ", " << closestVectorColor[currentView][closestVectorIdIndex].g << ", " << closestVectorColor[currentView][closestVectorIdIndex].b << ")" << endl;
-		}
+		}*/
 	}
 }
 
@@ -474,8 +608,9 @@ void Glut::drawClusterCenters()
 	for (int i = 0; i < _glut->_clusterCenters.rows; i++)
 	{
 		const float* Mi = _glut->_clusterCenters.ptr<float>(i);
-
+			
 		glColor4f(1.0f, 0.0f, 0.0f, 0.5f);
+
 		glVertex3f(Mi[0], Mi[1], 0.0f);
 		glVertex3f(Mi[0], Mi[1], len * 30);
 	}
@@ -504,12 +639,25 @@ void Glut::drawVoxels()
 
 		if (_glut->_labels.cols != 0)
 			label = _glut->_labels.at<int>(v);
+	/*	if (label < 0 || label > 3) {
+			label = 0;
+			cout << ":-( ALMOST FRI DAY LO!L " << v << endl;
+		}*/
 
-		float r = (float) _glut->_clusterColors[label].r / 255;
-		float g = (float) _glut->_clusterColors[label].g / 255;
-		float b = (float) _glut->_clusterColors[label].b / 255;
 
-		glColor4f(r,g,b,1);
+		float hue = rgb_to_hsv(_glut->_clusterColors[label]).hue;
+		HSVColor hsv;
+		RGBColor rgb;
+		/*hsv.hue = hue;
+		hsv.sat = 100;
+		hsv.val = 25;
+		rgb = hsv_to_rgb(hsv);*/
+		
+		rgb.r =  _glut->_clusterColors[label].r / 255;
+		rgb.g = _glut->_clusterColors[label].g / 255;
+		rgb.b = _glut->_clusterColors[label].b / 255;
+		
+		glColor4f(rgb.r,rgb.g,rgb.b,1);
 		
 		glVertex3f((GLfloat)voxels[v]->x, (GLfloat)voxels[v]->y, (GLfloat)voxels[v]->z);
 	}
@@ -531,8 +679,8 @@ void Glut::mainLoopWindows()
 	{
 
 		update(0);
-		//updateColorModels();
-		cluster();
+		updateColorModels();
+		//cluster();
 		display();
 		
 	}
@@ -886,6 +1034,7 @@ void Glut::display()
 void Glut::update(int v)
 {
 	
+
 	char key = waitKey(10);
 	keyboard(key, 0, 0);  // call glut key handler :)
 

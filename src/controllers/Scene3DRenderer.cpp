@@ -63,8 +63,8 @@ Scene3DRenderer::Scene3DRenderer(Reconstructor &r, const vector<Camera*> &cs) :
 	_v_threshold = V;
 	_pv_threshold = V;
 
-	_e_size = 1;
-	_pe_size = 1;
+	_e_size = 2;
+	_pe_size = 2;
 	_d_size = 2;
 	_pd_size = 2;
 

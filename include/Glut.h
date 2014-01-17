@@ -40,19 +40,37 @@ using namespace std;
 
 namespace nl_uu_science_gmt
 {
+	
+#define MIN3(x,y,z)  ((y) <= (z) ? \
+	((x) <= (y) ? (x) : (y)) \
+	: \
+	((x) <= (z) ? (x) : (z)))
+
+#define MAX3(x,y,z)  ((y) >= (z) ? \
+	((x) >= (y) ? (x) : (y)) \
+	: \
+	((x) >= (z) ? (x) : (z)))
+
 	struct RGBColor {
 		float r;
 		float g;
 		float b;
 	};
+	struct HSVColor {
+		float hue;        /* Hue degree between 0 and 255 */
+		float sat;        /* Saturation between 0 (gray) and 255 */
+		float val;        /* Value between 0 (black) and 255 */
+	};
 
+	
 class Glut
 {
 	Scene3DRenderer &_scene3d;
 	cv::Mat	 _clusterCenters;
 	cv::Mat  _labels;
+	vector<int> _vectorLabels;
 	vector<RGBColor> _clusterColors;
-
+	
 
 	static Glut* _glut;
 
@@ -103,7 +121,8 @@ public:
 										cv::Mat(&cameraFrames)[4], vector<float>(&closestVectorDistance)[4],
 										vector<RGBColor>& vectorColors, int currentView, int currentVoxelIndex);
 	static RGBColor calculateColor(cv::Vec3f & bgrPixel);
-	static float calcDistanceBetween(cv::Point3f pt1, cv::Point3f pt2);
+	static float calcDistanceBetween3d(cv::Point3f pt1, cv::Point3f pt2);
+	static float calcDistanceBetween2d(cv::Point2f pt1, cv::Point2f pt2);
 	static void viewColorsToVoxelColors(vector<int>(&closestVectorId)[4], vector<RGBColor>(&closestVectorColor)[4],
 		cv::Mat(&cameraFrames)[4], vector<RGBColor>& vectorColors);
 	static void quit();
@@ -112,6 +131,9 @@ public:
 	{
 		return _scene3d;
 	}
+
+	static struct HSVColor rgb_to_hsv(struct RGBColor rgb);
+	static struct RGBColor hsv_to_rgb(struct HSVColor hsv);
 
 };
 
